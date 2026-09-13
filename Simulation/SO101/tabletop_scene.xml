@@ -1,0 +1,217 @@
+<mujoco model="so101_tabletop">
+  <!-- ==========================================================================
+       SO-101 (with wrist camera) on a realistic tabletop, for keyboard/trackpad
+       teleoperation. Companion script: teleop.py
+       ========================================================================== -->
+  <include file="so101_new_calib_camera.xml"/>
+
+  <option timestep="0.002" integrator="implicitfast" cone="elliptic" impratio="10"/>
+
+  <statistic center="0.2 0 0.1" extent="0.9" meansize="0.02"/>
+
+  <visual>
+    <!-- Keep the headlight as a dim ambient wash; the scene lights do the real work. -->
+    <headlight ambient="0.20 0.20 0.22" diffuse="0.12 0.12 0.13" specular="0.05 0.05 0.05"/>
+    <quality shadowsize="8192" offsamples="8" numslices="40"/>
+    <map force="0.1" zfar="30" shadowclip="0.75" shadowscale="1.0"/>
+    <global azimuth="135" elevation="-22" offwidth="1920" offheight="1080"/>
+    <rgba haze="0.86 0.88 0.91 1"/>
+  </visual>
+
+  <asset>
+    <!-- Soft indoor sky: bright near the horizon, cooler overhead. -->
+    <texture type="skybox" builtin="gradient" rgb1="0.55 0.62 0.72" rgb2="0.88 0.90 0.93"
+             width="512" height="3072"/>
+
+    <texture type="2d" name="wood" file="assets/textures/wood_table.png"/>
+    <material name="table_top" texture="wood" texuniform="false" texrepeat="1.35 1.0"
+              specular="0.35" shininess="0.45" reflectance="0.04"/>
+
+    <texture type="2d" name="concrete" file="assets/textures/floor_concrete.png"/>
+    <material name="floor" texture="concrete" texuniform="true" texrepeat="6 6"
+              specular="0.08" shininess="0.1" reflectance="0.02"/>
+
+    <material name="table_frame" rgba="0.16 0.16 0.18 1" specular="0.5" shininess="0.5"/>
+    <material name="bowl_mat"    rgba="0.93 0.94 0.96 1" specular="0.7" shininess="0.75" reflectance="0.08"/>
+    <material name="cube_red"    rgba="0.78 0.19 0.17 1" specular="0.3" shininess="0.35"/>
+    <material name="cube_green"  rgba="0.24 0.55 0.29 1" specular="0.3" shininess="0.35"/>
+    <material name="cube_blue"   rgba="0.18 0.36 0.68 1" specular="0.3" shininess="0.35"/>
+    <material name="cube_yellow" rgba="0.87 0.68 0.15 1" specular="0.3" shininess="0.35"/>
+    <material name="ball_mat"    rgba="0.85 0.45 0.15 1" specular="0.55" shininess="0.6"/>
+    <material name="can_mat"     rgba="0.62 0.65 0.70 1" specular="0.9" shininess="0.9" reflectance="0.12"/>
+    <material name="mat_target"  rgba="0.1 0.85 0.45 0.55"/>
+  </asset>
+
+  <default>
+    <!-- Tabletop props: sticky enough to be picked up, damped enough to settle. -->
+    <default class="prop">
+      <geom condim="4" friction="1.1 0.02 0.004" solimp="0.95 0.99 0.001" solref="0.004 1"
+            density="600" group="0"/>
+    </default>
+    <default class="bowl">
+      <geom material="bowl_mat" condim="4" friction="0.9 0.02 0.004"
+            solimp="0.95 0.99 0.001" solref="0.004 1" density="900" group="0"/>
+    </default>
+    <default class="furniture">
+      <geom condim="3" friction="0.9 0.02 0.004" group="0"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <!-- ---------------------------------------------------------------- lights -->
+    <!-- Key light: front-left, casts the scene's shadows. -->
+    <light name="key" mode="fixed" pos="0.34 0.52 0.95" dir="-0.18 -0.52 -1.0"
+           directional="false" cutoff="42" exponent="18" castshadow="true"
+           diffuse="0.72 0.70 0.66" specular="0.30 0.30 0.28" attenuation="1 0 0.25"/>
+    <!-- Fill light: cooler, from the right, no shadows so it only lifts the darks. -->
+    <light name="fill" pos="0.15 -1.0 1.0" dir="0.1 0.72 -0.9" directional="true"
+           castshadow="false" diffuse="0.26 0.28 0.32" specular="0.04 0.04 0.05"/>
+    <!-- Soft overhead ceiling bounce. -->
+    <light name="ambient_top" pos="0.15 0 2.2" dir="0 0 -1" directional="true"
+           castshadow="false" diffuse="0.22 0.22 0.23" specular="0 0 0"/>
+    <!-- Gentle backlight to separate the arm from the background. -->
+    <light name="rim" pos="-0.9 0.1 0.7" dir="1 -0.1 -0.35" directional="true"
+           castshadow="false" diffuse="0.14 0.15 0.17" specular="0.08 0.08 0.08"/>
+
+    <!-- --------------------------------------------------------------- cameras -->
+    <camera name="overview"  pos="0.72  0.78 0.62" xyaxes="-0.74 0.68 0 -0.33 -0.36 0.87"/>
+    <camera name="front"     pos="0.95 -0.02 0.34" xyaxes="0 1 0 -0.35 0 0.94"/>
+    <camera name="side"      pos="0.18  0.85 0.36" xyaxes="-1 0 0 0 -0.38 0.93"/>
+    <camera name="topdown"   pos="0.22  0 0.95"    xyaxes="0 1 0 -1 0 0"/>
+    <camera name="operator"  pos="0.60  0.45 0.50" xyaxes="-0.6 0.8 0 -0.48 -0.36 0.80"/>
+
+    <!-- ----------------------------------------------------------------- floor -->
+    <geom name="floor" type="plane" pos="0 0 -0.74" size="0 0 0.05"
+          material="floor" class="furniture"/>
+
+    <!-- ------------------------------------------------------- table (top @ z=0) -->
+    <body name="table" pos="0.15 0 0">
+      <geom name="table_top" type="box" pos="0 0 -0.011" size="0.46 0.36 0.011"
+            material="table_top" class="furniture"/>
+      <!-- apron + legs, so the table reads as a real piece of furniture from any angle -->
+      <geom name="apron_x1" type="box" pos="0  0.345 -0.055" size="0.44 0.015 0.033"
+            material="table_frame" class="furniture"/>
+      <geom name="apron_x2" type="box" pos="0 -0.345 -0.055" size="0.44 0.015 0.033"
+            material="table_frame" class="furniture"/>
+      <geom name="apron_y1" type="box" pos="  0.445 0 -0.055" size="0.015 0.33 0.033"
+            material="table_frame" class="furniture"/>
+      <geom name="apron_y2" type="box" pos=" -0.445 0 -0.055" size="0.015 0.33 0.033"
+            material="table_frame" class="furniture"/>
+      <geom name="leg_1" type="box" pos=" 0.425  0.325 -0.385" size="0.02 0.02 0.353"
+            material="table_frame" class="furniture"/>
+      <geom name="leg_2" type="box" pos=" 0.425 -0.325 -0.385" size="0.02 0.02 0.353"
+            material="table_frame" class="furniture"/>
+      <geom name="leg_3" type="box" pos="-0.425  0.325 -0.385" size="0.02 0.02 0.353"
+            material="table_frame" class="furniture"/>
+      <geom name="leg_4" type="box" pos="-0.425 -0.325 -0.385" size="0.02 0.02 0.353"
+            material="table_frame" class="furniture"/>
+    </body>
+
+    <!-- ------------------------------------------------------------ the objects -->
+    <body name="bowl" pos="0.30 -0.155 0.0">
+      <freejoint name="bowl_free"/>
+      <geom class="bowl" type="cylinder" size="0.046 0.0045" pos="0 0 0.0045"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="0.0515 0.0000 0.0135" quat="0.933580 -0.000000 0.358368 0.000000"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="0.0497 0.0133 0.0135" quat="0.925594 -0.046776 0.355302 0.121857"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="0.0446 0.0257 0.0135" quat="0.901769 -0.092752 0.346157 0.241628"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="0.0364 0.0364 0.0135" quat="0.862516 -0.137141 0.331089 0.357266"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="0.0258 0.0446 0.0135" quat="0.808504 -0.179184 0.310356 0.466790"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="0.0133 0.0497 0.0135" quat="0.740659 -0.218161 0.284312 0.568328"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="0.0000 0.0515 0.0135" quat="0.660141 -0.253404 0.253404 0.660141"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="-0.0133 0.0497 0.0135" quat="0.568328 -0.284312 0.218161 0.740659"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="-0.0257 0.0446 0.0135" quat="0.466790 -0.310356 0.179184 0.808504"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="-0.0364 0.0364 0.0135" quat="0.357266 -0.331089 0.137141 0.862516"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="-0.0446 0.0257 0.0135" quat="0.241628 -0.346157 0.092752 0.901769"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="-0.0497 0.0133 0.0135" quat="0.121857 -0.355302 0.046776 0.925594"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="-0.0515 0.0000 0.0135" quat="0.000000 -0.358368 0.000000 0.933580"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="-0.0497 -0.0133 0.0135" quat="-0.121857 -0.355302 -0.046776 0.925594"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="-0.0446 -0.0257 0.0135" quat="-0.241628 -0.346157 -0.092752 0.901769"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="-0.0364 -0.0364 0.0135" quat="-0.357266 -0.331089 -0.137141 0.862516"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="-0.0258 -0.0446 0.0135" quat="-0.466790 -0.310356 -0.179184 0.808504"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="-0.0133 -0.0497 0.0135" quat="-0.568328 -0.284312 -0.218161 0.740659"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="-0.0000 -0.0515 0.0135" quat="-0.660141 -0.253404 -0.253404 0.660141"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="0.0133 -0.0497 0.0135" quat="-0.740659 -0.218161 -0.284312 0.568328"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="0.0258 -0.0446 0.0135" quat="-0.808504 -0.179184 -0.310356 0.466790"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="0.0364 -0.0364 0.0135" quat="-0.862516 -0.137141 -0.331089 0.357266"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="0.0446 -0.0258 0.0135" quat="-0.901769 -0.092752 -0.346157 0.241628"/>
+      <geom class="bowl" type="box" size="0.0035 0.0078 0.0145" pos="0.0497 -0.0133 0.0135" quat="-0.925594 -0.046776 -0.355302 0.121857"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="0.0700 0.0000 0.0380" quat="0.984808 -0.000000 0.173648 0.000000"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="0.0676 0.0181 0.0380" quat="0.976383 -0.022666 0.172163 0.128543"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="0.0606 0.0350 0.0380" quat="0.951251 -0.044943 0.167731 0.254887"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="0.0495 0.0495 0.0380" quat="0.909844 -0.066452 0.160430 0.376870"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="0.0350 0.0606 0.0380" quat="0.852869 -0.086824 0.150384 0.492404"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="0.0181 0.0676 0.0380" quat="0.781301 -0.105710 0.137764 0.599513"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="0.0000 0.0700 0.0380" quat="0.696364 -0.122788 0.122788 0.696364"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="-0.0181 0.0676 0.0380" quat="0.599513 -0.137764 0.105710 0.781301"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="-0.0350 0.0606 0.0380" quat="0.492404 -0.150384 0.086824 0.852869"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="-0.0495 0.0495 0.0380" quat="0.376870 -0.160430 0.066452 0.909844"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="-0.0606 0.0350 0.0380" quat="0.254887 -0.167731 0.044943 0.951251"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="-0.0676 0.0181 0.0380" quat="0.128543 -0.172163 0.022666 0.976383"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="-0.0700 0.0000 0.0380" quat="0.000000 -0.173648 0.000000 0.984808"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="-0.0676 -0.0181 0.0380" quat="-0.128543 -0.172163 -0.022666 0.976383"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="-0.0606 -0.0350 0.0380" quat="-0.254887 -0.167731 -0.044943 0.951251"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="-0.0495 -0.0495 0.0380" quat="-0.376870 -0.160430 -0.066452 0.909844"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="-0.0350 -0.0606 0.0380" quat="-0.492404 -0.150384 -0.086824 0.852869"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="-0.0181 -0.0676 0.0380" quat="-0.599513 -0.137764 -0.105710 0.781301"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="-0.0000 -0.0700 0.0380" quat="-0.696364 -0.122788 -0.122788 0.696364"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="0.0181 -0.0676 0.0380" quat="-0.781301 -0.105710 -0.137764 0.599513"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="0.0350 -0.0606 0.0380" quat="-0.852869 -0.086824 -0.150384 0.492404"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="0.0495 -0.0495 0.0380" quat="-0.909844 -0.066452 -0.160430 0.376870"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="0.0606 -0.0350 0.0380" quat="-0.951251 -0.044943 -0.167731 0.254887"/>
+      <geom class="bowl" type="box" size="0.0032 0.0105 0.0165" pos="0.0676 -0.0181 0.0380" quat="-0.976383 -0.022666 -0.172163 0.128543"/>
+    </body>
+
+    <body name="cube_red" pos="0.235 0.105 0.0145">
+      <freejoint name="cube_red_free"/>
+      <geom class="prop" type="box" size="0.0145 0.0145 0.0145" material="cube_red"/>
+    </body>
+
+    <body name="cube_green" pos="0.295 0.025 0.0145">
+      <freejoint name="cube_green_free"/>
+      <geom class="prop" type="box" size="0.0145 0.0145 0.0145" material="cube_green"/>
+    </body>
+
+    <body name="cube_blue" pos="0.185 -0.075 0.0145">
+      <freejoint name="cube_blue_free"/>
+      <geom class="prop" type="box" size="0.0145 0.0145 0.0145" material="cube_blue"/>
+    </body>
+
+    <body name="cube_yellow" pos="0.325 0.145 0.0125">
+      <freejoint name="cube_yellow_free"/>
+      <geom class="prop" type="box" size="0.0125 0.0125 0.0125" material="cube_yellow"/>
+    </body>
+
+    <body name="ball" pos="0.155 0.185 0.018">
+      <freejoint name="ball_free"/>
+      <geom class="prop" type="sphere" size="0.018" material="ball_mat"
+            friction="0.6 0.02 0.004"/>
+    </body>
+
+    <body name="can" pos="0.40 0.06 0.048">
+      <freejoint name="can_free"/>
+      <geom class="prop" type="cylinder" size="0.0165 0.048" material="can_mat" density="250"/>
+    </body>
+
+    <!-- Teleop target marker: shows where the IK is being asked to put the gripper.
+         Visual only (no collisions, no mass) and moved from Python each step. -->
+    <body name="ik_target" mocap="true" pos="0.25 0 0.12">
+      <geom name="ik_target_marker" type="sphere" size="0.009" material="mat_target"
+            contype="0" conaffinity="0" group="1"/>
+    </body>
+  </worldbody>
+
+  <keyframe>
+    <!-- "home": arm folded up and clear of the table, jaws horizontal (which is
+         how you grasp something sitting on a table) and half open -->
+    <key name="home"
+         qpos="0 -1.2 1.35 0.95 -1.571 0.6
+               0.30 -0.155 0 1 0 0 0
+               0.235 0.105 0.0145 1 0 0 0
+               0.295 0.025 0.0145 1 0 0 0
+               0.185 -0.075 0.0145 1 0 0 0
+               0.325 0.145 0.0125 1 0 0 0
+               0.155 0.185 0.018 1 0 0 0
+               0.40 0.06 0.048 1 0 0 0"
+         ctrl="0 -1.2 1.35 0.95 -1.571 0.6"/>
+  </keyframe>
+</mujoco>

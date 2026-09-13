@@ -1,0 +1,7 @@
+# Enough to run collect_demos.py / eval_policy.py on the Mac (data + inference only).
+# Training needs the CUDA box: see setup_3090.sh.
+mujoco>=3.2
+numpy
+imageio
+imageio-ffmpeg
+lerobot[dataset,training,pi,peft]>=0.6

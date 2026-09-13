@@ -8,6 +8,12 @@ This repository contains the URDF and MuJoCo (MJCF) files for the SO101 robot.
 - The generated URDFs were modified to allow meshes with relative paths instead of `package://...`.
 - Base collision meshes were removed due to problematic collision behavior during simulation and planning.
 
+## Teleoperation Scene
+
+`tabletop_scene.xml` puts the SO-101 (wrist-camera variant) on a table with a
+bowl, cubes, a ball and a can, and `teleop.py` lets you drive the gripper around
+it with the keyboard and trackpad. See [README_TELEOP.md](README_TELEOP.md).
+
 ## Calibration Methods
 
 The MuJoCo file `scene.xml` supports two differenly calibrated SO101 robot files:
